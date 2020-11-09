@@ -29,7 +29,7 @@ spline_support$df
 # variable income
 spline_income <- smooth.spline(x = income, y = overall, cv = TRUE)
 spline_income$df
-
+ 
 # variable health
 spline_health <- smooth.spline(x = health, y = overall, cv = TRUE)
 spline_health$df
