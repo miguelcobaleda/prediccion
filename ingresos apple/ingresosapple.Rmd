@@ -1,0 +1,130 @@
+---
+title: "Predicción ingresos Apple"
+author: "miguel González Cobaleda"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, 
+                      fig.height = 7, fig.width = 10, fig.align = "center")
+```
+
+# Objetivo
+
+Se debe elegir el modelo ETS y el modelo ARIMA que mejor predice las ventas de Apple, habiendo dejado fuera de la estimación los trimestres del 2017.
+
+Una vez seleccionado el modelo se estimara el modelo con todos los datos y se harán las predicciones del año 2017 y 2018.
+
+## Carga de librerias necesarias
+```{r librerias}
+library(ggplot2)
+library(forecast)
+library(ggfortify) 
+library(xts)
+```
+
+## Carga de los datos
+
+```{r carga de datos}
+apple <- read.csv("IngresosApple.csv", 
+                  sep = ";", 
+                  dec = ",")
+# Creación de un vector de fechas 
+tri <- seq(as.Date('01/04/2008', '%d/%m/%Y'),
+           as.Date('30/09/2017', '%d/%m/%Y'),
+           by = 'quarter')
+```
+
+```{r objeto xts}
+# Objeto de tipo xts
+xIngresos <- xts(apple$Ingresos, order.by = tri)
+xIngresos <- to.quarterly(xIngresos)
+```
+
+```{r objeto zoo}
+# Objeto de tipo zoo para realizar el forecasting
+zIngresos <- as.zoo(xIngresos$xIngresos.Close)
+names(zIngresos)='Ingresos'
+```
+
+# Visualización de datos
+
+Serie temporal de los ingresos de apple desde el 2Q 2008 hasta el Q3 2017
+
+```{r grafico ingresos}
+autoplot(zIngresos)+ggtitle('Ingresos Trimestrales de Apple')+xlab('Trimestres')+ylab('Ingresos')
+```
+
+Podemos observar como los ingresos de la empresa Apple tienen una clara tendencia ascendente en este periodo, a su vez también se puede ver como ha aumentado la varianza en los ingresos en los últimos trimestres.
+
+# Modelos ETS
+
+Los modelos ETS son diferentes modelos para estudiar y poder predecir series temporales.
+
+```{r seleccion de los datos de training}
+cOmit <- 3 # Para indicar que se dejen fuera 3 trimestres
+nObs <- length(zIngresos)
+
+# datos eliminando los 3 ultimos trimestres
+oIngresos <- window(zIngresos, # datos tipo zoo de los ingresos
+  start = index(zIngresos[1]), # indica que empiece en el primer trimestre
+  end = index(zIngresos[nObs - cOmit])) # Indica el final, eliminando 3 trimestres del año 2017
+
+```
+
+Mediante los Criterios de Información (IC) vamos a intentar seleccionar el mejor modelo ETS de forma automática.
+
+Los Criterios de Información cuantifican la información residual. Cuanto más información tienen los residuos del modelo mayor es el IC, por lo tanto peor es el modelo.
+
+
+```{r}
+## Selecciona un modelo ETS de forma automática
+etsfit<-ets(oIngresos)
+#forecast model
+fingresos.ets<-forecast(etsfit)
+#Results
+summary(fingresos.ets)
+```
+
+Según los Criterios de Información, el mejor modelo será un del tipo (M, A, M), con AIC de 703.95. Además tiene un RMSE de 4120.15
+
+A continuación graficaremos el modelo.
+
+```{r}
+plot(fingresos.ets)
+lines(window(zIngresos),type="o")
+```
+
+Se puede ver a simple vista que predice bastante bien.
+
+# Modelo ARIMA
+
+Vamos a predecir utilizando los modelos ARIMA, y lo compararemos con el mejor modelo ETS, nos quedaremos con el que tenga menor RMSE.
+
+```{r}
+# Modelo ARIMA 
+arimafit <- auto.arima(oIngresos,lambda=0)
+fingresos.arima<-forecast(arimafit)
+summary(fingresos.arima)
+```
+
+Comparando el RMSE del modelo ARIMA (4786.40) con el RMSE del mejor modelo ETS (4120.15), escogeremos el modelo ETS para realizar la predicción sobre el total de los datos para el año 2017 y 2018.
+
+# Predicción del modelo ETS con todos los datos hasta el Q3 2017
+
+```{r}
+tIngresos <- window(zIngresos,start=index(zIngresos[1]),end=index(zIngresos[nObs]))  # seleccionamos todos los datos
+
+etsfitfin<-ets(tIngresos)  # seleccionamos el mejor modelo ets
+
+fingresosfin.ets<-forecast(etsfitfin) # realizamos la prediccion del modelo
+
+summary(fingresosfin.ets) # summary para ver las predicciones en numeros
+
+plot(fingresosfin.ets) # grafico para ver la prediccion de manera visual
+lines(window(zIngresos),type="o")
+```
