@@ -1,0 +1,186 @@
+---
+title: "Práctica Colgate y Crest"
+author: "Miguel González Cobaleda"
+date: "`r Sys.Date()`"
+output:
+  word_document
+---
+
+```{r include=FALSE}
+library(openxlsx)
+library(ggplot2)
+library(zoo)
+library(forecast)
+library(xts)
+library(TSA)
+```
+
+```{r include=FALSE}
+datos<-read.xlsx("data.xlsx")
+
+datos$Date <- as.Date(paste(datos$Year, datos$Week, 1, sep = "-"), "%Y-%U-%u")
+```
+
+# Introducción y objetivo
+
+En general, a los directores de marketing les gustaría conocer la efectividad de sus gastos en publicidad. El análisis de intervención proporciona una herramienta que puede ser útil para evaluar el impacto de las iniciativas que la empresa, los competidores o terceros pueden realizar en el mix de mercado. En esta caso práctico, consideramos la lucha por la cuota de mercado entre la crema dental Colgate de Colgate-Palmolive y la crema dental Crest de Procter y Gamble.
+
+Procter y Gamble introdujeron Crest en el mercado estadounidense en 1956. Antes de ese momento, Colgate disfrutaba de un liderazgo de mercado con una participación de mercado cercana al 50%. Durante los siguientes 4 años, Colgate siguió siendo un competidor dominante y Crest solo logró una participación de mercado relativamente modesta pero estable del 15%. Sin embargo, el 1 de agosto de 1960, el Consejo de Terapéutica Dental de la American Dental Association (ADA) aprobó a Crest como una “ayuda importante en cualquier programa de higiene dental”.
+
+Mientras tanto, Procter y Gamble revitalizaron su campaña de marketing para aprovechar el respaldo de la ADA, lo que dio como resultado un salto casi inmediato en la cuota de mercado de Crest en detrimento de la de Colgate.
+
+En el fichero data.xlsx se encuentran las cuotas del mercado de Colgate y Crest semanales desde 1958 hasta abril de 1963.
+
+El objetivo es predecir las 16 semanas del año 1963, para las dos cuotas de mercado, por lo que se dejará fuera de la muestra este periodo muestral.
+
+# Análisis exploratorio
+
+Analizamos estadisticamente cada una de las variables del dataset
+
+```{r}
+summary(datos)
+```
+
+```{r include=FALSE}
+#dividimos la serie en 2 
+xcolgate <- xts(datos$Colgate, order.by = datos$Date)
+xcrest <- xts(datos$Crest, order.by = datos$Date)
+```
+
+# Gráficos cuota de mercado Crest y Colgate
+
+Como se puede apreciar en los gráficos, la tendencia de las dos marcas es completamente opuesta. Mientras que la cuota de mercado de Crest es ascendente, la cuota de mercado de Colgate es descendente. Se puede apreciar como hay unas semanas en las que se acentua este cambio, en el año 1960, año en el cual los dentistas recomendaron Crest en detrimento de Colgate.
+
+```{r echo=FALSE}
+autoplot(xcrest) + geom_line() +
+  ylab("Cuota de mercado")+ggtitle("Cuota semanal Crest")+xlab("Semanas")
+autoplot(xcolgate) + geom_line() +
+  ylab("Cuota de mercado") + ggtitle("Cuota semanal Colgate") + xlab("Semanas")
+```
+
+# Tratamiento de datos
+
+```{r include=FALSE}
+#Conversion de datos
+#Transformamos a zoo
+zcolgate<-as.zoo(xcolgate)
+zcrest<-as.zoo(xcrest)
+names(zcolgate)<-"Colgate"
+names(zcrest)<-"Crest"
+```
+
+```{r include=FALSE}
+#Select number of observation to compare forecast
+#Quitamos 16 semanas de 1963
+cOmit = 16
+#Data Size
+nObs = length(zcrest)
+#sub_sample
+
+ocrest <- window(zcrest, start = index(zcrest[1]), end = index(zcrest[nObs - cOmit]))
+ocolgate <- window(zcolgate, start = index(zcolgate[1]), end = index(zcolgate[nObs - cOmit]))
+```
+
+
+# Modelo ARIMA
+
+Antes de realizar el modelo Arima, tendremos que transformar las series de datos, ya que nuestras series no son estacionarias. Para hacerlas estacionarias hay que utilizar el logaritmo para la varianza y la diferencia para la media.
+
+```{r}
+ggtsdisplay(diff(log(zcolgate)))
+ggtsdisplay(diff(log(zcrest)))
+```
+
+A continuación realizamos el modelo Arima utilizando la función autoarima
+
+## Modelo ARIMA Colgate
+
+Además de estimar el modelo Arima, obtendremos los residuos
+
+```{r}
+# estimacion del modelo
+arima_colgate <- auto.arima(ocolgate, lambda = 0) 
+
+# resumen del modelo
+summary(arima_colgate)
+
+# residuos
+ggtsdisplay(arima_colgate$residuals,
+            main = "Residuos de ARIMA(0,1,1) colgate") 
+```
+
+## Modelo ARIMA Crest
+
+```{r}
+# estimacion del modelo
+arima_crest <- auto.arima(ocrest, lambda = 0)
+
+# resumen del modelo
+summary(arima_crest)
+
+#residuos
+ggtsdisplay(arima_crest$residuals,
+            main = "Residuos de ARIMA(3,1,0) crest")
+```
+
+# Predicción de los modelos ARIMA
+
+## Predicción de Colgate
+
+Hacemos una predicción a 16 semanas
+
+```{r}
+fcolgate <- forecast(arima_colgate, h=16)
+plot(fcolgate)
+```
+
+## Predicción de Colgate
+
+Hacemos una predicción a 16 semanas
+
+```{r}
+fcrest <- forecast(arima_crest, h=16)
+plot(fcrest)
+```
+
+# Outliers
+
+## Outliers de Crest
+
+Observamos que no hay outliers AO, y 1 outlier IO en la semana 99.
+
+```{r}
+detectAO(arima_crest)
+detectIO(arima_crest)
+```
+
+## Outliers de Colgate
+
+Observamos que no hay outliers AO, y 1 outlier IO en la semana 102.
+
+```{r}
+detectAO(arima_colgate)
+detectIO(arima_colgate)
+```
+
+Los outliers serán al final del año 1959 y a principios del año 1960 además si observamos el gráfico de la cuota de mercado cambia bruscamente
+
+# Función de transferencia
+
+Como se puede observar en el gráfico, se produce una pérdida de cuota de mercado de Colgate en favor de Crest, vemos esta transferencia es grande en las dos primeras semanas pero luegodesciende y se estabiliza
+
+```{r}
+crest_99 <- window(zcrest, end=99) 
+colgate_99 <- window(zcolgate, end=99) 
+crest_99_D <- diff(crest_99) 
+colgate_99_D <- diff(colgate_99) 
+
+mod <- arimax(as.double(colgate_99_D),
+               order=c(0,1,1),
+               include.mean=TRUE,
+               xtransf=crest_99_D,
+               transfer=list(c(0,15)),
+               method="ML")
+
+plot(mod$coef, type = 'h', main = "Efecto de Crest sobre Colgate")
+```
