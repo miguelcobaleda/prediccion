@@ -1,0 +1,55 @@
+---
+title: "Cointegración BMW y VW"
+author: "Miguel González Cobaleda"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+# Objetivos
+
+La finalidad de este estudio es comprobar la cointegración de las cotizaciones bursátiles de BMW y Volkswagen.
+Para descubrir esto, haremos el test Dickey Fuller y a continuación crearemos un modelo lineal y analizaremos los residuos.
+
+```{r warning=FALSE}
+library(quantmod)
+library(tseries)
+```
+
+Lo primero que haremos será cargar las cotizaciones, nos quedaremos con el precio de cierre de cada cotización.
+
+```{r}
+bmw <- getSymbols("BMW.DE",env=NULL, from="2014-01-01",to="2020-12-11")[,4]
+vw <- getSymbols("VOW.DE",env=NULL,from="2014-01-01",to="2020-12-11")[,4]
+```
+
+El siguiente paso será hacer estacionarias a las dos series y unirlas en un único dataframe; además eliminaremos las observaciones NA, cuando la bolsa no abrió.
+
+```{r}
+bmw_est <- diff(bmw)
+vw_est <- diff(vw)
+bmw_vw <- cbind(bmw_est, vw_est)
+bmw_vw <- na.omit(bmw_vw)
+```
+
+
+A continuación realizaremos el test de Dickey Fuller, con los resultados que obtenemos concluiremos que las dos series son estacionarias.
+
+```{r}
+adf.test(bmw_vw[,1])
+adf.test(bmw_vw[,2])
+```
+
+El último paso será estudiar los residuos y ver si son estacionarios para concluir finalmente que hay una cointegración. 
+
+```{r}
+bmw_vw_lm <- lm(BMW.DE.Close ~., data = bmw_vw)
+residuos <- bmw_vw_lm$residuals
+adf.test(residuos, alternative="stationary", k=0)
+```
+
+# Conclusiones
+
+Las dos series por separado son estacionarias, y despues de crear un modelo lineal hemos observado que los residuos son también estacionarios por lo que podemos concluir que existe cointegración entre BMW y Volkswagen.

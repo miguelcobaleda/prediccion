@@ -1,0 +1,81 @@
+---
+title: "Causal Impact BMW y VW"
+author: "Miguel González Cobaleda"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r include=FALSE}
+library(CausalImpact)
+library(quantmod)
+```
+
+# Objetivos
+
+El objetivo de este análisis será observar el impacto que ha tenido el dieselgate en BMW y Volkswagen. El dieselgate fue un escandalo de falsificación de emisiones por parte de VW que le hizo tener que pagar multas millonarias y por tanto la empresa sufrio bastante en bolsa.
+
+Lo primero será descargar los datos, seleccionamos los datos con el precio de cierre de cada activo.
+
+```{r}
+bmw <- getSymbols('BMW.DE', env=NULL, warnings = FALSE, from = '2014-01-01', to = '2020-12-11')[,4]
+vw <- getSymbols('VOW.DE', env=NULL, from = '2014-01-01', to = '2020-12-11')[,4]
+```
+
+A continuación creamos dos tablas de datos con las dos acciones y generamos un gráfico en el que se puede apreciar la caida de Volkswagen por el dieselgate.
+
+```{r}
+bmw_vw <- cbind(bmw, vw)
+plot(bmw_vw)
+bmw_vw <- na.omit(bmw_vw)
+bmw_vw <- cbind(bmw_vw, fecha = rownames(bmw_vw))
+vw_bmw <- cbind(vw, bmw)
+vw_bmw <- na.omit(vw_bmw)
+vw_bmw <- cbind(vw_bmw, fecha = rownames(vw_bmw))
+```
+
+El siguiente paso para estudiar el impacto bursátil que tuvo el dieselgate en Volkswagen, será generar dos etapas o periodos, antes y después del dieselgate. 
+
+```{r}
+pre_dieselgate <- as.Date(c("2014-01-01", "2015-09-19")) 
+post_dieselgate <- as.Date(c("2015-09-30", '2020-12-11'))
+```
+
+## Impacto dieselgate en BMW
+
+Observamos el impacto que hubiera tenido si no se hubiese producido el dieselgate, de tal forma que como el normal, bmw subió despues del problema de Volkswagen ya que son empresas competidoras y los accionistas compraron BMW y vendieron VW
+
+```{r}
+dieselgate_bmw <- CausalImpact(bmw_vw, 
+                             pre.period = pre_dieselgate, 
+                             post.period = post_dieselgate)
+summary(dieselgate_bmw)
+plot(dieselgate_bmw, 'original')
+```
+
+Generamos a continuación un report mediante IA
+
+```{r}
+summary(dieselgate_bmw, 'report')
+```
+
+## Impacto dieselgate Volkswagen
+
+Como se puede apreciar en el gráfico, si no se hubiera producido el escándalo del dieselgate las acciones de Volkswagen habrían subido.
+
+```{r}
+dieselgate_vw <- CausalImpact(vw_bmw, 
+                             pre.period = pre_dieselgate, 
+                             post.period = post_dieselgate)
+summary(dieselgate_vw)
+plot(dieselgate_vw, 'original')
+```
+
+Generamos a continuación un report mediante IA
+
+```{r}
+summary(dieselgate_vw, 'report')
+```
+
